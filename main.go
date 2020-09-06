@@ -22,15 +22,15 @@ func handleHTTP(ctx *fasthttp.RequestCtx) {
 }
 
 func handleHTTPS(ctx *fasthttp.RequestCtx) {
-	certificates := tls.Certificate{
-
-	}
+	//certificates := tls.Certificate{
+	//	Certificate:
+	//}
 	conf := &tls.Config{
 
 		//InsecureSkipVerify: true,
 	}
-	fmt.Println(string(ctx.RemoteAddr().String()))
-	conn, err := tls.Dial("tcp", ctx.URI().String(), conf)
+	//fmt.Println(string(ctx.RemoteAddr().String()))
+	conn, err := tls.Dial("tcp", "https://google.com", conf)
 	if err != nil {
 		log.Println(err)
 		return
