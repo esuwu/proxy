@@ -1,85 +1,138 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
+	"github.com/esuwu/my-proxy/findVulnerabilities"
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
-	"net/url"
+	"os"
+	"path/filepath"
+	"time"
 )
 
 
+func handleTunneling(w http.ResponseWriter, r *http.Request) {
+	f, err := os.Open("requests/.last_request.txt")
+	if err != nil {
+		panic(err)
+	}
+	headers, err := ioutil.ReadAll(r.Body)
+	f.Write(headers)
+
+	dest_conn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
+		return
+	}
+	client_conn, _, err := hijacker.Hijack()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	}
+	go transfer(dest_conn, client_conn)
+	go transfer(client_conn, dest_conn)
+}
+func transfer(destination io.WriteCloser, source io.ReadCloser) {
+	defer destination.Close()
+	defer source.Close()
+	io.Copy(destination, source)
+}
 func handleHTTP(w http.ResponseWriter, req *http.Request) {
+	file, err := os.Create(filepath.Join("requests", filepath.Base("last_request_" + req.Host + ".txt")))
+	defer file.Close()
+
+	req.Write(file)
+	if err != nil {
+		fmt.Print(err)
+	}
+
 	resp, err := http.DefaultTransport.RoundTrip(req)
 	if err != nil {
-		fmt.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	defer resp.Body.Close()
-	for key, value := range resp.Header {
-		for _, v := range value {
-			w.Header().Add(key, v)
-		}
-	}
+	copyHeader(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
-
 }
-
-func handleHTTPS(w http.ResponseWriter, req *http.Request) {
-
-	caCert, err := ioutil.ReadFile("certs/rootCA.crt")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
-	u, err := url.Parse(req.RequestURI)
-	req.RequestURI = ""
-
-	req.URL = u
-
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      caCertPool,
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-	resp, err := client.Get("https://" + req.URL.Scheme)
-	for key, value := range resp.Header {
-		for _, v := range value {
-			w.Header().Add(key, v)
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
 		}
 	}
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
 }
 
 
 
 func main() {
-	httpProxy := &http.Server{
-		Addr: ":8080",
+
+
+	server := &http.Server{
+		Addr: ":8081",
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodConnect {
-				handleHTTPS(w, r)
+				handleTunneling(w, r)
 			} else {
 				handleHTTP(w, r)
 			}
 		}),
+		// Disable HTTP/2.
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
-	log.Println("HTTP proxy started on 8080 port: ")
-	err := httpProxy.ListenAndServe()
-	if err != nil {
-		log.Println(err)
-		return
+
+	serverForRepeating := &http.Server{
+		Addr: ":8082",
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fileName, _ := r.URL.Query()["file"]
+
+			content, err := ioutil.ReadFile(filepath.Join("requests", filepath.Base(fileName[0])))
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			readerBytes := bytes.NewReader(content)
+			readerBufio := bufio.NewReader(readerBytes)
+			newReq, err := http.ReadRequest(readerBufio)
+			newReq.RequestURI = "http://" + newReq.Host
+			newReq.URL.Scheme = "http"
+			newReq.URL.Host = newReq.Host
+			resp, err := http.DefaultTransport.RoundTrip(newReq)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			defer resp.Body.Close()
+			copyHeader(w.Header(), resp.Header)
+			w.WriteHeader(resp.StatusCode)
+			io.Copy(w, resp.Body)
+
+
+			vulnerability, err := findVulnerabilities.FindVulnerability(newReq)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println("Vulnerability is", vulnerability)
+		}),
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
+
+	go serverForRepeating.ListenAndServe()
+
+	log.Fatal(server.ListenAndServe())
+
 }

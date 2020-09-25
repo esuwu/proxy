@@ -1,3 +1,6 @@
-cd certs
-openssl genrsa -out rootCA.key 4096
-openssl req -x509 -new -key rootCA.key -days 3650 -out rootCA.crt
+#!/bin/sh
+
+openssl genrsa -out ca.key 2048
+openssl req -new -x509 -days 3650 -key ca.key -out ca.crt -subj "/CN=mail.ru proxy CA"
+openssl genrsa -out cert.key 2048
+mkdir certs/
