@@ -18,12 +18,12 @@ import (
 
 
 func handleTunneling(w http.ResponseWriter, r *http.Request) {
-	f, err := os.Open("requests/.last_request.txt")
-	if err != nil {
-		panic(err)
-	}
-	headers, err := ioutil.ReadAll(r.Body)
-	f.Write(headers)
+	//f, err := os.Open("requests/.last_request.txt")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//headers, err := ioutil.ReadAll(r.Body)
+	//f.Write(headers)
 
 	dest_conn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {
@@ -133,6 +133,7 @@ func main() {
 
 	go serverForRepeating.ListenAndServe()
 
+	log.Println("Proxy server started on 8081 port")
 	log.Fatal(server.ListenAndServe())
 
 }
