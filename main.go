@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
+	"main/middleware"
 	"math/rand"
 	"net/http"
 	"time"
 )
+
 
 
 func normalInverse(mu float32, sigma float32) float32 {
@@ -29,13 +33,16 @@ func handleHTTP(w http.ResponseWriter, req *http.Request) {
 
 
 func main() {
-	server := &http.Server{
-		Addr: ":8081",
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				handleHTTP(w, r)
-		}),
-	}
+	mainrouter := mux.NewRouter()
+	mainrouter.HandleFunc("/", handleHTTP).Methods(http.MethodGet)
+	mainrouter.Use(middleware.PrometheusMetricsMiddleware)
 
-	log.Println("server started on 8080 port")
-	log.Fatal(server.ListenAndServe())
+
+	metricsRouter := mainrouter.PathPrefix("/metrics").Subrouter()
+	metricsRouter.Handle("", promhttp.Handler()).Methods(http.MethodGet)
+
+
+
+	log.Println("server started on 8081 port")
+	log.Fatal(http.ListenAndServe(":8081", mainrouter))
 }
