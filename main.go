@@ -1,48 +1,61 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
+	"main/config"
 	"main/middleware"
+	"main/monitoring"
 	"math/rand"
 	"net/http"
 	"time"
 )
 
+const (
+	ReplyPhrase = "Hello World!"
+)
 
-
-func normalInverse(mu float32, sigma float32) float32 {
-	return float32(rand.NormFloat64() * float64(sigma) + float64(mu))
+func init() {
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
+	}
 }
 
+func normalInverse(mu float32, sigma float32) float32 {
+	return float32(rand.NormFloat64()*float64(sigma) + float64(mu))
+}
 
 func handleHTTP(w http.ResponseWriter, req *http.Request) {
-
 	timeToSleep := int64(normalInverse(500, 200))
 	if timeToSleep <= 0 {
 		timeToSleep = 200
 	}
 	dur := time.Duration(timeToSleep) * time.Millisecond
-	fmt.Println(dur)
+
+	log.Println("time duration:", dur)
+
 	time.Sleep(dur)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("kek"))
+
+	if _, err := w.Write([]byte(ReplyPhrase)); err != nil {
+		log.Println(err)
+	}
 }
 
-
 func main() {
-	mainrouter := mux.NewRouter()
-	mainrouter.HandleFunc("/", handleHTTP).Methods(http.MethodGet)
-	mainrouter.Use(middleware.PrometheusMetricsMiddleware)
+	prometheus.MustRegister(monitoring.Hits, monitoring.RequestDuration)
 
+	conf := config.New()
+	mainRouter := mux.NewRouter()
 
-	metricsRouter := mainrouter.PathPrefix("/metrics").Subrouter()
-	metricsRouter.Handle("", promhttp.Handler()).Methods(http.MethodGet)
+	mainRouter.Use(middleware.CreatePrometheusMetricsMiddleware(&conf))
 
+	mainRouter.HandleFunc("/", handleHTTP).Methods(http.MethodGet)
+	mainRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
 
-
-	log.Println("server started on 8081 port")
-	log.Fatal(http.ListenAndServe(":8081", mainrouter))
+	log.Printf("server started on %s", conf.ServerEndpoint)
+	log.Fatal(http.ListenAndServe(conf.ServerEndpoint, mainRouter))
 }
