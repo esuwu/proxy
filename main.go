@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,9 +15,7 @@ import (
 	"time"
 )
 
-const (
-	ReplyPhrase = "Hello World!\r\n"
-)
+var replyPhrase string
 
 func init() {
 	if err := godotenv.Load(); err != nil {
@@ -40,7 +39,7 @@ func handleHTTP(w http.ResponseWriter, req *http.Request) {
 	time.Sleep(dur)
 	w.WriteHeader(http.StatusOK)
 
-	if _, err := w.Write([]byte(ReplyPhrase)); err != nil {
+	if _, err := w.Write([]byte(replyPhrase)); err != nil {
 		log.Println(err)
 	}
 }
@@ -52,6 +51,8 @@ func main() {
 	mainRouter := mux.NewRouter()
 
 	mainRouter.Use(middleware.CreatePrometheusMetricsMiddleware(&conf))
+
+	replyPhrase = fmt.Sprintf("Hello World!\n\rFrom backend #%d\n\r", conf.BackendID)
 
 	mainRouter.HandleFunc("/", handleHTTP).Methods(http.MethodGet)
 	mainRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
