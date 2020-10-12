@@ -12,7 +12,7 @@ type Config struct {
 
 func New() Config {
 	return Config{
-		BackendID:      getIntEnvOrDefault("BACKEND_ID", 0),
+		BackendID:      getIntEnvOrDefault("BACKEND_ID", 3),
 		ServerEndpoint: getStringEnvOrDefault("SERVER_ENDPOINT", ":8081"),
 	}
 }
