@@ -1,0 +1,10 @@
+[Unit]
+Description=backend service
+[Service]
+Type=simple
+ExecStart=/home/ubuntu/main_bin/main
+ExecStop=/home/ubuntu/main_bin/main
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
