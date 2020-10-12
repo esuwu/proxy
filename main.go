@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	ReplyPhrase = "Hello World!"
+	ReplyPhrase = "Hello World!\r\n"
 )
 
 func init() {
