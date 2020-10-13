@@ -48,6 +48,10 @@ func handleHealth(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func send500(w http.ResponseWriter, req *http.Request) {
+	w.WriteHeader(http.StatusInternalServerError)
+}
+
 func main() {
 	prometheus.MustRegister(monitoring.Hits, monitoring.RequestDuration)
 
@@ -64,6 +68,7 @@ func main() {
 	mainRouter.HandleFunc("/health", handleHealth).Methods(http.MethodHead)
 
 	apiRouter.HandleFunc("/", handleHTTP).Methods(http.MethodGet)
+	apiRouter.HandleFunc("/500", send500).Methods(http.MethodGet)
 
 	log.Printf("server started on %s", conf.ServerEndpoint)
 	log.Fatal(http.ListenAndServe(conf.ServerEndpoint, mainRouter))
