@@ -44,18 +44,26 @@ func handleHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func handleHealth(w http.ResponseWriter, req *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
 func main() {
 	prometheus.MustRegister(monitoring.Hits, monitoring.RequestDuration)
 
 	conf := config.New()
-	mainRouter := mux.NewRouter()
-
-	mainRouter.Use(middleware.CreatePrometheusMetricsMiddleware(&conf))
 
 	replyPhrase = fmt.Sprintf("Hello World!\n\rFrom backend #%d\n\r", conf.BackendID)
 
-	mainRouter.HandleFunc("/", handleHTTP).Methods(http.MethodGet)
+	mainRouter := mux.NewRouter()
+
+	apiRouter := mainRouter.PathPrefix("").Subrouter()
+	apiRouter.Use(middleware.CreatePrometheusMetricsMiddleware(&conf))
+
 	mainRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
+	mainRouter.HandleFunc("/health", handleHealth).Methods(http.MethodHead)
+
+	apiRouter.HandleFunc("/", handleHTTP).Methods(http.MethodGet)
 
 	log.Printf("server started on %s", conf.ServerEndpoint)
 	log.Fatal(http.ListenAndServe(conf.ServerEndpoint, mainRouter))
