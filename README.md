@@ -1,8 +1,8 @@
 # HTTP proxy server golang
-- HTTP сделано
-- HTTPS пытался неоднократно, то работает, то не работает
-- Сохранение запросов сделано
-- Сканнер уязвимости сделано
+- HTTP
+- HTTPS 
+- Сохранение запросов
+- Сканнер уязвимости
 
 # How to use on the example of http://info.cern.ch/
 
